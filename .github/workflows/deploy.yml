@@ -1,0 +1,41 @@
+name: Deploy
+permissions: write-all
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    name: website
+    uses: ClayenApps/actions/.github/workflows/docker-ghcr.yml@main
+
+  deploy:
+    name: Deploy
+    needs: build-and-push
+    uses: ClayenApps/actions/.github/workflows/portainer-update.yml@main
+    with:
+      apiUrl: "https://admin.clayenkitten.ru/docker/api"
+      serviceId: ${{ vars.PORTAINER_SERVICE_ID }}
+      endpointId: ${{ vars.PORTAINER_ENDPOINT_ID }}
+    secrets:
+      token: ${{ secrets.PORTAINER_ACCESS_TOKEN }}
+
+  notify:
+    name: Send Telegram report
+    if: ${{ always() }}
+    needs: [build-and-push, deploy]
+    uses: ClayenApps/actions/.github/workflows/telegram-notify.yml@main
+    with:
+      message: |
+        *${{ github.repository }}*
+        Project deployed successfully\\.
+
+        *Status*
+        Build: ${{ needs.build-and-push.result }}
+        Deploy: ${{ needs.deploy.result }}
+      additional_buttons: '[{ "text": "Website", "url": "https://clayenkitten.ru" }]'
+    secrets:
+      chat_id: ${{ secrets.TELEGRAM_CHAT }}
+      token: ${{ secrets.TELEGRAM_TOKEN }}
